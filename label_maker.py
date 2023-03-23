@@ -3,6 +3,7 @@ import sys
 from enum import IntEnum, IntFlag
 
 import bluetooth
+import paho.mqtt.client as mqtt
 
 import app_args
 from config import set_default_bt, get_default_bt
@@ -352,20 +353,56 @@ def bad_options(message):
     print(f"Error: {message}. Use {sys.argv[0]} --help to get more information")
     exit(1)
 
+def on_message(client, userdata, msg):
+    options = app_args.parse()
+    command = msg.payload.decode("utf-8")
+    print(f"Received command: {command}")
+
+    with bt_socket_manager(bluetooth.RFCOMM) as socket:
+        socket.connect((options.bt_address, options.bt_channel))
+
+        send_invalidate(socket)
+        send_initialize(socket)
+        send_status_information_request(socket)
+
+        status_information = receive_status_information_response(socket)
+        handle_status_information(status_information)
+
+        width = TZE_DOTS.get(detected_media_width)
+        data = encode_png(options.image, width)
+
+        send_switch_dynamic_command_mode(socket)
+        send_switch_automatic_status_notification_mode(socket)
+        send_print_information_command(socket, len(data), detected_media_width)
+        send_various_mode_settings(socket)
+        send_advanced_mode_settings(socket)
+        send_specify_margin_amount(socket)
+        send_select_compression_mode(socket)
+        send_raster_data(socket, data)
+        send_print_command_with_feeding(socket)
+
+        while True:
+            status_information = receive_status_information_response(socket)
+            handle_status_information(status_information)
 
 def main():
     options = app_args.parse()
 
-    if not options.info and not options.image:
+    if not options.info and (not options.image or not options.broker):
         bad_options('Image path required')
-
     if options.set_default:
         if not options.bt_address:
             bad_options('You must provide a BT address to set as default')
         else:
             set_default_bt(options.bt_address)
             print(f"{options.bt_address} set as default BT address")
-
+    if options.broker:
+        client = mqtt.Client()
+        client.on_message = on_message
+        client.connect(options.broker, options.port)
+        client.subscribe(options.topic)
+        client.loop_forever()
+        exit(1)
     if not options.bt_address:
         default_bt = get_default_bt()
         if not default_bt:

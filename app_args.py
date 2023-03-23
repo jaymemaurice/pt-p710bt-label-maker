@@ -13,6 +13,10 @@ def set_args() -> argparse.ArgumentParser:
     parser.add_argument('--set-default', action='store_true', help='Store the `bt_address` value as the default for '
                                                                    'future executions of the script')
     parser.add_argument('-i', '--info', action='store_true', help="Fetch information from the printer")
+    parser.add_argument('--broker', type=str, help="MQTT Broker")
+    parser.add_argument('--password', type=str, help="MQTT Password")
+    parser.add_argument('--port', type=int, help="MQTT Port")
+    parser.add_argument('--topic', type=str, help="MQTT Topic")
     return parser
 
 
